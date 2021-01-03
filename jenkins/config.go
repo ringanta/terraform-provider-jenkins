@@ -12,6 +12,7 @@ import (
 
 type jenkinsClient interface {
 	GetLocalUser(username string) (jenkinsLocalUser, error)
+	CreateLocalUser(username string, password string, fullname string, email string) error
 }
 
 type jenkinsLocalUser struct {
@@ -77,4 +78,27 @@ func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error)
 	}
 
 	return localUser, nil
+}
+
+func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fullname string, email string) error {
+	payload := [...]string{
+		"import hudson.tasks.Mailer",
+		fmt.Sprintf("def user = Jenkins.instance.securityRealm.createAccount('%s', '%s')", username, password),
+		fmt.Sprintf("user.addProperty(new Mailer.UserProperty('%s'))", email),
+		fmt.Sprintf("user.setFullName('%s')", fullname),
+	}
+	finalPayload := url.Values{}
+	finalPayload.Set("script", strings.Join(payload[:], "\n"))
+
+	resp, err := j.Requester.Post("/scriptText", strings.NewReader(finalPayload.Encode()), new(interface{}), map[string]string{})
+
+	if err != nil {
+		return fmt.Errorf("Error making request to Jenkins: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
+	}
+
+	return nil
 }

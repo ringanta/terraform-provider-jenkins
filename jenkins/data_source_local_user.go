@@ -10,28 +10,7 @@ import (
 func dataSourceLocalUser() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceLocalUserRead,
-		Schema: map[string]*schema.Schema{
-			"email": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Email address of the Jenkins local user",
-			},
-			"fullname": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Full name of the Jenkins local user",
-			},
-			"password_hash": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Password hash of the jenkins local user",
-			},
-			"username": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "Username of the Jenkins local user",
-			},
-		},
+		Schema:      dataSourceLocalUserSchema,
 	}
 }
 
@@ -62,4 +41,27 @@ func dataSourceLocalUserRead(ctx context.Context, d *schema.ResourceData, m inte
 
 	d.SetId(username)
 	return nil
+}
+
+var dataSourceLocalUserSchema = map[string]*schema.Schema{
+	"email": {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "Email address of the Jenkins local user",
+	},
+	"fullname": {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "Full name of the Jenkins local user",
+	},
+	"password_hash": {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "Password hash of the jenkins local user",
+	},
+	"username": {
+		Type:        schema.TypeString,
+		Required:    true,
+		Description: "Username of the Jenkins local user",
+	},
 }
