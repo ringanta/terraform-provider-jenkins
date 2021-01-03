@@ -5,6 +5,7 @@ NAME=jenkins
 BINARY=terraform-provider-${NAME}
 VERSION=0.1
 OS_ARCH=darwin_amd64
+export COMPOSE_FILE=./docker_compose/docker-compose.yml
 
 default: install
 
@@ -34,4 +35,8 @@ test:
 	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4                    
 
 testacc: 
-	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 120m   
+	@docker-compose build
+	@docker-compose up -d --force-recreate jenkins
+	@while [ "$$(docker inspect jenkins-provider-acc --format '{{ .State.Health.Status }}')" != "healthy" ]; do echo "Waiting for Jenkins to start..."; sleep 3; done
+	TF_ACC=1 JENKINS_URL="http://localhost:8080" JENKINS_USERNAME="admin" JENKINS_PASSWORD="adminpwd" go test -v -cover ./...
+	@docker-compose down

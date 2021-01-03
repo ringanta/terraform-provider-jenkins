@@ -1,0 +1,14 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: adminpwd
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:admin"
+unclassified:
+  location:
+    url: http://localhost:8080/

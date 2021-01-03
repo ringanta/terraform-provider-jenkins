@@ -98,6 +98,7 @@ type jenkinsClient interface {
 	GetLocalUser(username string) (jenkinsLocalUser, error)
 	CreateLocalUser(username string, password string, fullname string, email string, description string) error
 	DeleteLocalUser(username string) error
+	PostScript(payload bytes.Buffer, respStruct interface{}) error
 }
 
 type jenkinsLocalUser struct {
@@ -144,28 +145,18 @@ func newJenkinsClient(c *Config) *jenkinsAdapter {
 }
 
 func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error) {
-	payload := url.Values{}
+	var command bytes.Buffer
 	commandTemplate := template.Must(template.New("command").Parse(getLocalUserCommand))
 
-	var command bytes.Buffer
 	err := commandTemplate.Execute(&command, jenkinsLocalUser{Username: username})
 	if err != nil {
 		return jenkinsLocalUser{}, fmt.Errorf("Failed parsing groovy commands to get local user: %v", err)
 	}
-	payload.Set("script", command.String())
 
 	response := jenkinsResponse{}
 	var respStruct interface{} = &response
 
-	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
-
-	if err != nil {
-		return jenkinsLocalUser{}, fmt.Errorf("Error making request to Jenkins: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return jenkinsLocalUser{}, fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
-	}
+	j.PostScript(command, respStruct)
 
 	if response.Error {
 		return jenkinsLocalUser{}, fmt.Errorf(response.Message)
@@ -176,7 +167,6 @@ func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error)
 
 func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fullname string, email string, description string) error {
 	var command bytes.Buffer
-	payload := url.Values{}
 	commandTemplate := template.Must(template.New("command").Parse(createLocalUserCommand))
 	data := jenkinsLocalUserCreate{
 		Password: password,
@@ -195,16 +185,7 @@ func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fulln
 
 	response := jenkinsResponse{}
 	var respStruct interface{} = &response
-	payload.Set("script", command.String())
-	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
-
-	if err != nil {
-		return fmt.Errorf("Error making request to Jenkins: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
-	}
+	j.PostScript(command, respStruct)
 
 	if response.Error {
 		return fmt.Errorf(response.Message)
@@ -214,31 +195,36 @@ func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fulln
 }
 
 func (j *jenkinsAdapter) DeleteLocalUser(username string) error {
-	payload := url.Values{}
-	commandTemplate := template.Must(template.New("command").Parse(deleteLocalUserCommand))
-
 	var command bytes.Buffer
+	commandTemplate := template.Must(template.New("command").Parse(deleteLocalUserCommand))
 	err := commandTemplate.Execute(&command, jenkinsLocalUser{Username: username})
 	if err != nil {
 		return fmt.Errorf("Failed parsing groovy commands to get local user: %v", err)
 	}
-	payload.Set("script", command.String())
 
 	response := jenkinsResponse{}
 	var respStruct interface{} = &response
 
-	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
+	j.PostScript(command, respStruct)
 
+	if response.Error {
+		return fmt.Errorf(response.Message)
+	}
+
+	return nil
+}
+
+func (j *jenkinsAdapter) PostScript(payload bytes.Buffer, respStruct interface{}) error {
+	finalPayload := url.Values{}
+	finalPayload.Set("script", payload.String())
+
+	resp, err := j.Requester.Post("/scriptText", strings.NewReader(finalPayload.Encode()), respStruct, map[string]string{})
 	if err != nil {
 		return fmt.Errorf("Error making request to Jenkins: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
-	}
-
-	if response.Error {
-		return fmt.Errorf(response.Message)
 	}
 
 	return nil
