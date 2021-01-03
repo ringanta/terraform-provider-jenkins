@@ -4,16 +4,13 @@ data "jenkins_local_user" "admin" {
 
 resource "jenkins_local_user" "test" {
   username = "test"
-  password = "testpwd"
+  password = ""
   email    = "test@localhost"
-  fullname = "test"
-}
+  fullname = "Test"
 
-resource "jenkins_local_user" "test2" {
-  username = "test2"
-  password = "test2pwd"
-  email    = "test2@localhost"
-  fullname = "Test 2"
+  lifecycle {
+    ignore_changes = [password]
+  }
 }
 
 output "admin_description" {

@@ -13,7 +13,10 @@ func resourceLocalUser() *schema.Resource {
 		ReadContext:   resourceLocalUserRead,
 		UpdateContext: resourceLocalUserUpdate,
 		DeleteContext: resourceLocalUserDelete,
-		Schema:        resourceLocalUserSchema,
+		Importer: &schema.ResourceImporter{
+			StateContext: schema.ImportStatePassthroughContext,
+		},
+		Schema: resourceLocalUserSchema,
 	}
 }
 
