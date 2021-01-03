@@ -37,7 +37,7 @@ if (user != null) {
 	result['data']['fullname'] = user.getFullName()
   	result['data']['password_hash'] = user.getProperty(Details.class).getPassword()
   	result['data']['email'] = user.getProperty(Mailer.UserProperty.class).getAddress()
-  	result['data']['description'] = user.getDescription() != null ?: ''
+  	result['data']['description'] = user.getDescription() != null ? user.getDescription() : ''
 } else {
 	result['error'] = false
   	result['msg'] = ''
@@ -48,12 +48,28 @@ return println(JsonOutput.toJson(result))
 `
 
 const createLocalUserCommand = `
+import hudson.security.HudsonPrivateSecurityRealm
 import hudson.tasks.Mailer
+import groovy.json.JsonOutput
 
-def user = Jenkins.instance.securityRealm.createAccount('{{ .Username }}', '{{ .Password }}')
+def result = [:]
+def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
+if (!secRealm instanceof HudsonPrivateSecurityRealm) {
+  result['error'] = true
+  result['msg'] = 'Jenkins is not using local user database'
+  result['data'] = [:]
+  return println(JsonOutput.toJson(result))
+}
+
+def user = secRealm.createAccount('{{ .Username }}', '{{ .Password }}')
 user.addProperty(new Mailer.UserProperty('{{ .Email }}'))
 user.setFullName('{{ .Fullname }}')
 user.setDescription('{{ .Description }}')
+result['error'] = false
+result['msg'] = 'User {{ .Username }} successfully created'
+result['data'] = [:]
+
+return println(JsonOutput.toJson(result))
 `
 
 type jenkinsClient interface {
@@ -138,7 +154,7 @@ func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error)
 func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fullname string, email string, description string) error {
 	var command bytes.Buffer
 	payload := url.Values{}
-	commandTemplate := template.Must(template.New("command").Parse(getLocalUserCommand))
+	commandTemplate := template.Must(template.New("command").Parse(createLocalUserCommand))
 	data := jenkinsLocalUserCreate{
 		Password: password,
 		jenkinsLocalUser: jenkinsLocalUser{

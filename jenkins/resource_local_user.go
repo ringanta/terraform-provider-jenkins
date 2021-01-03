@@ -81,9 +81,20 @@ func resourceLocalUserRead(ctx context.Context, d *schema.ResourceData, m interf
 }
 
 func resourceLocalUserUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
+	client := m.(jenkinsClient)
 
-	return diags
+	username := d.Get("username").(string)
+	password := d.Get("password").(string)
+	email := d.Get("email").(string)
+	fullname := d.Get("fullname").(string)
+	description := d.Get("description").(string)
+
+	err := client.CreateLocalUser(username, password, fullname, email, description)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return resourceLocalUserRead(ctx, d, m)
 }
 
 func resourceLocalUserDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
