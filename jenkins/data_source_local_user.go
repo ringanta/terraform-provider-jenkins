@@ -39,6 +39,10 @@ func dataSourceLocalUserRead(ctx context.Context, d *schema.ResourceData, m inte
 		return diag.FromErr(err)
 	}
 
+	if err := d.Set("description", user.Description); err != nil {
+		return diag.FromErr(err)
+	}
+
 	d.SetId(username)
 	return nil
 }
@@ -63,5 +67,10 @@ var dataSourceLocalUserSchema = map[string]*schema.Schema{
 		Type:        schema.TypeString,
 		Required:    true,
 		Description: "Username of the Jenkins local user",
+	},
+	"description": {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "Description of the Jenkins local user",
 	},
 }

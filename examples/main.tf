@@ -16,9 +16,9 @@ resource "jenkins_local_user" "test2" {
   fullname = "Test 2"
 }
 
-output "admin_email" {
-  description = "Email of admin user"
-  value       = data.jenkins_local_user.admin.email
+output "admin_description" {
+  description = "Description of admin user"
+  value       = data.jenkins_local_user.admin.description
 }
 
 output "test_fullname" {

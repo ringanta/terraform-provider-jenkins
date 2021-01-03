@@ -25,6 +25,7 @@ func resourceLocalUserCreate(ctx context.Context, d *schema.ResourceData, m inte
 	password := d.Get("password").(string)
 	email := d.Get("email").(string)
 	fullname := d.Get("fullname").(string)
+	description := d.Get("description").(string)
 
 	user, err := client.GetLocalUser(username)
 	if err != nil {
@@ -35,7 +36,7 @@ func resourceLocalUserCreate(ctx context.Context, d *schema.ResourceData, m inte
 		return diag.Errorf("Local user %s is already existing in the Jenkins system", username)
 	}
 
-	err = client.CreateLocalUser(username, password, fullname, email, "")
+	err = client.CreateLocalUser(username, password, fullname, email, description)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -69,6 +70,10 @@ func resourceLocalUserRead(ctx context.Context, d *schema.ResourceData, m interf
 	}
 
 	if err := d.Set("fullname", user.Fullname); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("description", user.Description); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -114,5 +119,11 @@ var resourceLocalUserSchema = map[string]*schema.Schema{
 		Required:    true,
 		ForceNew:    true,
 		Description: "Username of the Jenkins local user",
+	},
+	"description": {
+		Type:        schema.TypeString,
+		Optional:    true,
+		Default:     "Managed by Terraform",
+		Description: "Description of the Jenkins local user",
 	},
 }
