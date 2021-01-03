@@ -21,3 +21,8 @@ terraform init
 terraform plan -out=tfplan.out
 terraform apply tfplan.out
 ```
+
+## Attribution
+
+This provider is inspired from the work of https://github.com/taiidani/terraform-provider-jenkins.
+Some codes and documentations are copy pasted from there.
