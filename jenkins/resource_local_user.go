@@ -35,7 +35,7 @@ func resourceLocalUserCreate(ctx context.Context, d *schema.ResourceData, m inte
 		return diag.Errorf("Local user %s is already existing in the Jenkins system", username)
 	}
 
-	err = client.CreateLocalUser(username, password, fullname, email)
+	err = client.CreateLocalUser(username, password, fullname, email, "")
 	if err != nil {
 		return diag.FromErr(err)
 	}

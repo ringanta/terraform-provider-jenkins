@@ -1,18 +1,64 @@
 package jenkins
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"strings"
+	"text/template"
 
 	jenkins "github.com/bndr/gojenkins"
 )
 
+const getLocalUserCommand = `
+import hudson.security.HudsonPrivateSecurityRealm
+import hudson.security.HudsonPrivateSecurityRealm.Details
+import hudson.tasks.Mailer
+import groovy.json.JsonOutput
+
+def result = [:]
+
+def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
+if (!secRealm instanceof HudsonPrivateSecurityRealm) {
+  result['error'] = true
+  result['msg'] = 'Jenkins is not using local user database'
+  result['data'] = [:]
+  return println(JsonOutput.toJson(result))
+}
+
+user = secRealm.getUser('{{ .Username }}')
+if (user != null) {
+  	result['error'] = false
+  	result['msg'] = ''
+	result['data'] = [:]
+  	result['data']['username'] = user.getId()
+	result['data']['fullname'] = user.getFullName()
+  	result['data']['password_hash'] = user.getProperty(Details.class).getPassword()
+  	result['data']['email'] = user.getProperty(Mailer.UserProperty.class).getAddress()
+  	result['data']['description'] = user.getDescription() != null ?: ''
+} else {
+	result['error'] = false
+  	result['msg'] = ''
+  	result['data'] = [:]
+}
+
+return println(JsonOutput.toJson(result))
+`
+
+const createLocalUserCommand = `
+import hudson.tasks.Mailer
+
+def user = Jenkins.instance.securityRealm.createAccount('{{ .Username }}', '{{ .Password }}')
+user.addProperty(new Mailer.UserProperty('{{ .Email }}'))
+user.setFullName('{{ .Fullname }}')
+user.setDescription('{{ .Description }}')
+`
+
 type jenkinsClient interface {
 	GetLocalUser(username string) (jenkinsLocalUser, error)
-	CreateLocalUser(username string, password string, fullname string, email string) error
+	CreateLocalUser(username string, password string, fullname string, email string, description string) error
 }
 
 type jenkinsLocalUser struct {
@@ -20,6 +66,18 @@ type jenkinsLocalUser struct {
 	Fullname     string `json:"fullname"`
 	PasswordHash string `json:"password_hash"`
 	Username     string `json:"username"`
+	Description  string `json:"description"`
+}
+
+type jenkinsLocalUserCreate struct {
+	Password string
+	jenkinsLocalUser
+}
+
+type jenkinsResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"msg"`
+	Data    jenkinsLocalUser
 }
 
 // jenkinsAdapter wraps the Jenkins client, enabling additional functionality
@@ -47,27 +105,20 @@ func newJenkinsClient(c *Config) *jenkinsAdapter {
 }
 
 func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error) {
-	payload := [...]string{
-		"import hudson.security.HudsonPrivateSecurityRealm.Details",
-		"import hudson.tasks.Mailer",
-		"import groovy.json.JsonOutput",
-		"def response = [:]",
-		fmt.Sprintf("def user = jenkins.model.Jenkins.instance.securityRealm.getUser('%s')", username),
-		"if (user != null) {",
-		`response["username"] = user.getId()`,
-		`response["fullname"] = user.getFullName()`,
-		`response["email"] = user.getProperty(Mailer.UserProperty.class).getAddress()`,
-		`response["password_hash"] = user.getProperty(Details.class).getPassword()`,
-		"}",
-		"println(JsonOutput.toJson(response))",
+	payload := url.Values{}
+	commandTemplate := template.Must(template.New("command").Parse(getLocalUserCommand))
+
+	var command bytes.Buffer
+	err := commandTemplate.Execute(&command, jenkinsLocalUser{Username: username})
+	if err != nil {
+		return jenkinsLocalUser{}, fmt.Errorf("Failed parsing groovy commands to get local user: %v", err)
 	}
-	finalPayload := url.Values{}
-	finalPayload.Set("script", strings.Join(payload[:], "\n"))
+	payload.Set("script", command.String())
 
-	localUser := jenkinsLocalUser{}
-	var respStruct interface{} = &localUser
+	response := jenkinsResponse{}
+	var respStruct interface{} = &response
 
-	resp, err := j.Requester.Post("/scriptText", strings.NewReader(finalPayload.Encode()), respStruct, map[string]string{})
+	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
 
 	if err != nil {
 		return jenkinsLocalUser{}, fmt.Errorf("Error making request to Jenkins: %v", err)
@@ -77,20 +128,36 @@ func (j *jenkinsAdapter) GetLocalUser(username string) (jenkinsLocalUser, error)
 		return jenkinsLocalUser{}, fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
 	}
 
-	return localUser, nil
+	if response.Error {
+		return jenkinsLocalUser{}, fmt.Errorf(response.Message)
+	}
+
+	return response.Data, nil
 }
 
-func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fullname string, email string) error {
-	payload := [...]string{
-		"import hudson.tasks.Mailer",
-		fmt.Sprintf("def user = Jenkins.instance.securityRealm.createAccount('%s', '%s')", username, password),
-		fmt.Sprintf("user.addProperty(new Mailer.UserProperty('%s'))", email),
-		fmt.Sprintf("user.setFullName('%s')", fullname),
+func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fullname string, email string, description string) error {
+	var command bytes.Buffer
+	payload := url.Values{}
+	commandTemplate := template.Must(template.New("command").Parse(getLocalUserCommand))
+	data := jenkinsLocalUserCreate{
+		Password: password,
+		jenkinsLocalUser: jenkinsLocalUser{
+			Username:    username,
+			Fullname:    fullname,
+			Email:       email,
+			Description: description,
+		},
 	}
-	finalPayload := url.Values{}
-	finalPayload.Set("script", strings.Join(payload[:], "\n"))
 
-	resp, err := j.Requester.Post("/scriptText", strings.NewReader(finalPayload.Encode()), new(interface{}), map[string]string{})
+	err := commandTemplate.Execute(&command, data)
+	if err != nil {
+		return fmt.Errorf("Failed parsing groovy commands to get local user: %v", err)
+	}
+
+	response := jenkinsResponse{}
+	var respStruct interface{} = &response
+	payload.Set("script", command.String())
+	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
 
 	if err != nil {
 		return fmt.Errorf("Error making request to Jenkins: %v", err)
@@ -98,6 +165,10 @@ func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fulln
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
+	}
+
+	if response.Error {
+		return fmt.Errorf(response.Message)
 	}
 
 	return nil
