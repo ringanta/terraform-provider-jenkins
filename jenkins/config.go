@@ -72,9 +72,32 @@ result['data'] = [:]
 return println(JsonOutput.toJson(result))
 `
 
+const deleteLocalUserCommand = `
+import hudson.security.HudsonPrivateSecurityRealm
+import groovy.json.JsonOutput
+
+def result = [:]
+def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
+if (!secRealm instanceof HudsonPrivateSecurityRealm) {
+  result['error'] = true
+  result['msg'] = 'Jenkins is not using local user database'
+  result['data'] = [:]
+  return println(JsonOutput.toJson(result))
+}
+
+user = secRealm.getUser('{{ .Username }}')
+user.delete()
+result['error'] = false
+result['msg'] = 'User {{ .Username }} successfully created'
+result['data'] = [:]
+
+return println(JsonOutput.toJson(result))
+`
+
 type jenkinsClient interface {
 	GetLocalUser(username string) (jenkinsLocalUser, error)
 	CreateLocalUser(username string, password string, fullname string, email string, description string) error
+	DeleteLocalUser(username string) error
 }
 
 type jenkinsLocalUser struct {
@@ -173,6 +196,37 @@ func (j *jenkinsAdapter) CreateLocalUser(username string, password string, fulln
 	response := jenkinsResponse{}
 	var respStruct interface{} = &response
 	payload.Set("script", command.String())
+	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
+
+	if err != nil {
+		return fmt.Errorf("Error making request to Jenkins: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Call to jenkins return non 200 response code: %d, %v", resp.StatusCode, resp)
+	}
+
+	if response.Error {
+		return fmt.Errorf(response.Message)
+	}
+
+	return nil
+}
+
+func (j *jenkinsAdapter) DeleteLocalUser(username string) error {
+	payload := url.Values{}
+	commandTemplate := template.Must(template.New("command").Parse(deleteLocalUserCommand))
+
+	var command bytes.Buffer
+	err := commandTemplate.Execute(&command, jenkinsLocalUser{Username: username})
+	if err != nil {
+		return fmt.Errorf("Failed parsing groovy commands to get local user: %v", err)
+	}
+	payload.Set("script", command.String())
+
+	response := jenkinsResponse{}
+	var respStruct interface{} = &response
+
 	resp, err := j.Requester.Post("/scriptText", strings.NewReader(payload.Encode()), respStruct, map[string]string{})
 
 	if err != nil {

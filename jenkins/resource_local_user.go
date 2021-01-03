@@ -98,7 +98,14 @@ func resourceLocalUserUpdate(ctx context.Context, d *schema.ResourceData, m inte
 }
 
 func resourceLocalUserDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	client := m.(jenkinsClient)
 	var diags diag.Diagnostics
+
+	username := d.Id()
+	err := client.DeleteLocalUser(username)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	return diags
 }
