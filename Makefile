@@ -38,5 +38,5 @@ testacc:
 	@docker-compose build
 	@docker-compose up -d --force-recreate jenkins
 	@while [ "$$(docker inspect jenkins-provider-acc --format '{{ .State.Health.Status }}')" != "healthy" ]; do echo "Waiting for Jenkins to start..."; sleep 3; done
-	TF_ACC=1 JENKINS_URL="http://localhost:8080" JENKINS_USERNAME="admin" JENKINS_PASSWORD="adminpwd" go test -v -cover ./...
+	TF_ACC=1 JENKINS_URL="http://localhost:8080" JENKINS_USERNAME="admin" JENKINS_PASSWORD="adminpwd" go test -v -cover ./jenkins/...
 	@docker-compose down
