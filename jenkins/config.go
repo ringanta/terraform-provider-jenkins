@@ -19,6 +19,7 @@ type jenkinsClient interface {
 	GetUserPermissions(username string) (jenkinsUserPermissions, error)
 	CreateUserPermissions(username string, permissions []string) error
 	UpdateUserPermissions(username string, permissions []string) error
+	DeleteUserPermissions(username string) error
 	PostScript(payload bytes.Buffer, respStruct interface{}) error
 }
 
@@ -193,6 +194,26 @@ func (j *jenkinsAdapter) UpdateUserPermissions(username string, permissions []st
 	err := commandTemplate.Execute(&command, jenkinsUserPermissions{Username: username, Permissions: permissions})
 	if err != nil {
 		return fmt.Errorf("Error parsing groovy commands to update user permissions: %v", err)
+	}
+
+	response := jenkinsResponseUserPermissions{}
+	var respStruct interface{} = &response
+
+	j.PostScript(command, respStruct)
+	if response.Error {
+		return fmt.Errorf(response.Message)
+	}
+
+	return nil
+}
+
+func (j *jenkinsAdapter) DeleteUserPermissions(username string) error {
+	var command bytes.Buffer
+
+	commandTemplate := template.Must(template.New("command").Parse(deleteUserPermissionsCommand))
+	err := commandTemplate.Execute(&command, jenkinsUserPermissions{Username: username})
+	if err != nil {
+		return fmt.Errorf("Error parsing groovy commands to delete user permissions: %v", err)
 	}
 
 	response := jenkinsResponseUserPermissions{}

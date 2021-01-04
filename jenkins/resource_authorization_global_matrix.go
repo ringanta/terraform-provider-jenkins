@@ -75,9 +75,15 @@ func resourceAuthorizationGlobalMatrixUpdate(ctx context.Context, d *schema.Reso
 }
 
 func resourceAuthorizationGlobalMatrixDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
+	client := m.(jenkinsClient)
 
-	return diags
+	username := d.Id()
+	err := client.DeleteUserPermissions(username)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
 
 var resourceAuthorizationGlobalMatrixSchema = map[string]*schema.Schema{
