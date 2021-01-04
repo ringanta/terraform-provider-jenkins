@@ -39,7 +39,8 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"jenkins_local_user": resourceLocalUser(),
+			"jenkins_local_user":                  resourceLocalUser(),
+			"jenkins_authorization_global_matrix": resourceAuthorizationGlobalMatrix(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{

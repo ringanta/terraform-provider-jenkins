@@ -12,92 +12,12 @@ import (
 	jenkins "github.com/bndr/gojenkins"
 )
 
-const getLocalUserCommand = `
-import hudson.security.HudsonPrivateSecurityRealm
-import hudson.security.HudsonPrivateSecurityRealm.Details
-import hudson.tasks.Mailer
-import groovy.json.JsonOutput
-
-def result = [:]
-
-def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
-if (!secRealm instanceof HudsonPrivateSecurityRealm) {
-  result['error'] = true
-  result['msg'] = 'Jenkins is not using local user database'
-  result['data'] = [:]
-  return println(JsonOutput.toJson(result))
-}
-
-user = secRealm.getUser('{{ .Username }}')
-if (user != null) {
-  	result['error'] = false
-  	result['msg'] = ''
-	result['data'] = [:]
-  	result['data']['username'] = user.getId()
-	result['data']['fullname'] = user.getFullName()
-  	result['data']['password_hash'] = user.getProperty(Details.class).getPassword()
-  	result['data']['email'] = user.getProperty(Mailer.UserProperty.class).getAddress()
-  	result['data']['description'] = user.getDescription() != null ? user.getDescription() : ''
-} else {
-	result['error'] = false
-  	result['msg'] = ''
-  	result['data'] = [:]
-}
-
-return println(JsonOutput.toJson(result))
-`
-
-const createLocalUserCommand = `
-import hudson.security.HudsonPrivateSecurityRealm
-import hudson.tasks.Mailer
-import groovy.json.JsonOutput
-
-def result = [:]
-def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
-if (!secRealm instanceof HudsonPrivateSecurityRealm) {
-  result['error'] = true
-  result['msg'] = 'Jenkins is not using local user database'
-  result['data'] = [:]
-  return println(JsonOutput.toJson(result))
-}
-
-def user = secRealm.createAccount('{{ .Username }}', '{{ .Password }}')
-user.addProperty(new Mailer.UserProperty('{{ .Email }}'))
-user.setFullName('{{ .Fullname }}')
-user.setDescription('{{ .Description }}')
-result['error'] = false
-result['msg'] = 'User {{ .Username }} successfully created'
-result['data'] = [:]
-
-return println(JsonOutput.toJson(result))
-`
-
-const deleteLocalUserCommand = `
-import hudson.security.HudsonPrivateSecurityRealm
-import groovy.json.JsonOutput
-
-def result = [:]
-def secRealm = jenkins.model.Jenkins.instance.getSecurityRealm()
-if (!secRealm instanceof HudsonPrivateSecurityRealm) {
-  result['error'] = true
-  result['msg'] = 'Jenkins is not using local user database'
-  result['data'] = [:]
-  return println(JsonOutput.toJson(result))
-}
-
-user = secRealm.getUser('{{ .Username }}')
-user.delete()
-result['error'] = false
-result['msg'] = 'User {{ .Username }} successfully created'
-result['data'] = [:]
-
-return println(JsonOutput.toJson(result))
-`
-
 type jenkinsClient interface {
 	GetLocalUser(username string) (jenkinsLocalUser, error)
 	CreateLocalUser(username string, password string, fullname string, email string, description string) error
 	DeleteLocalUser(username string) error
+	GetUserPermissions(username string) (jenkinsUserPermissions, error)
+	CreateUserPermissions(username string, permissions []string) error
 	PostScript(payload bytes.Buffer, respStruct interface{}) error
 }
 
@@ -115,9 +35,20 @@ type jenkinsLocalUserCreate struct {
 }
 
 type jenkinsResponse struct {
-	Error   bool   `json:"error"`
-	Message string `json:"msg"`
-	Data    jenkinsLocalUser
+	Error   bool             `json:"error"`
+	Message string           `json:"msg"`
+	Data    jenkinsLocalUser `json:"data"`
+}
+
+type jenkinsUserPermissions struct {
+	Username    string   `json:"username"`
+	Permissions []string `json:"permissions"`
+}
+
+type jenkinsResponseUserPermissions struct {
+	Error   bool                   `json:"error"`
+	Message string                 `json:"msg"`
+	Data    jenkinsUserPermissions `json:"data"`
 }
 
 // jenkinsAdapter wraps the Jenkins client, enabling additional functionality
@@ -207,6 +138,46 @@ func (j *jenkinsAdapter) DeleteLocalUser(username string) error {
 
 	j.PostScript(command, respStruct)
 
+	if response.Error {
+		return fmt.Errorf(response.Message)
+	}
+
+	return nil
+}
+
+func (j *jenkinsAdapter) GetUserPermissions(username string) (jenkinsUserPermissions, error) {
+	var command bytes.Buffer
+
+	commandTemplate := template.Must(template.New("command").Parse(getUserPermissionsCommand))
+	err := commandTemplate.Execute(&command, jenkinsUserPermissions{Username: username})
+	if err != nil {
+		return jenkinsUserPermissions{}, fmt.Errorf("Error parsing groovy commands to get user permissions: %v", err)
+	}
+
+	response := jenkinsResponseUserPermissions{}
+	var respStruct interface{} = &response
+
+	j.PostScript(command, respStruct)
+	if response.Error {
+		return jenkinsUserPermissions{}, fmt.Errorf(response.Message)
+	}
+
+	return response.Data, nil
+}
+
+func (j *jenkinsAdapter) CreateUserPermissions(username string, permissions []string) error {
+	var command bytes.Buffer
+
+	commandTemplate := template.Must(template.New("command").Parse(createUserPermissionsCommand))
+	err := commandTemplate.Execute(&command, jenkinsUserPermissions{Username: username, Permissions: permissions})
+	if err != nil {
+		return fmt.Errorf("Error parsing groovy commands to create user permissions: %v", err)
+	}
+
+	response := jenkinsResponseUserPermissions{}
+	var respStruct interface{} = &response
+
+	j.PostScript(command, respStruct)
 	if response.Error {
 		return fmt.Errorf(response.Message)
 	}

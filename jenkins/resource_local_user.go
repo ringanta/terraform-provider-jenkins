@@ -21,7 +21,6 @@ func resourceLocalUser() *schema.Resource {
 }
 
 func resourceLocalUserCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
 	client := m.(jenkinsClient)
 
 	username := d.Get("username").(string)
@@ -45,8 +44,7 @@ func resourceLocalUserCreate(ctx context.Context, d *schema.ResourceData, m inte
 	}
 
 	d.SetId(username)
-	resourceLocalUserRead(ctx, d, m)
-	return diags
+	return resourceLocalUserRead(ctx, d, m)
 }
 
 func resourceLocalUserRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
