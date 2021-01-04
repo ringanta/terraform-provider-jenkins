@@ -1,7 +1,7 @@
 # jenkins_local_user Resource
 
 Manage local user on the Jenkins system.
-The target Jenkins ssytem must use Jenkin's own user database as its security realm.
+The target Jenkins system must use Jenkin's own user database as its security realm.
 
 ## Example Usage
 
