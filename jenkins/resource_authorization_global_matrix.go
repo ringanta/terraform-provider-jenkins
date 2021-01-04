@@ -25,14 +25,10 @@ func resourceAuthorizationGlobalMatrixCreate(ctx context.Context, d *schema.Reso
 	client := m.(jenkinsClient)
 
 	username := d.Get("username").(string)
-	permissions := d.Get("permissions").([]interface{})
-	permsStr := make([]string, len(permissions))
+	permsSet := d.Get("permissions").(*schema.Set)
+	permissions := converSetToSliceStr(permsSet)
 
-	for i, v := range permissions {
-		permsStr[i] = fmt.Sprint(v)
-	}
-
-	err := client.CreateUserPermissions(username, permsStr)
+	err := client.CreateUserPermissions(username, permissions)
 	if err != nil {
 		diag.FromErr(err)
 	}
@@ -63,9 +59,19 @@ func resourceAuthorizationGlobalMatrixRead(ctx context.Context, d *schema.Resour
 }
 
 func resourceAuthorizationGlobalMatrixUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
+	client := m.(jenkinsClient)
 
-	return diags
+	username := d.Id()
+	permsSet := d.Get("permissions").(*schema.Set)
+	permissions := converSetToSliceStr(permsSet)
+
+	err := client.UpdateUserPermissions(username, permissions)
+	if err != nil {
+		diag.FromErr(err)
+	}
+
+	d.SetId(username)
+	return resourceAuthorizationGlobalMatrixRead(ctx, d, m)
 }
 
 func resourceAuthorizationGlobalMatrixDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -89,4 +95,14 @@ var resourceAuthorizationGlobalMatrixSchema = map[string]*schema.Schema{
 			Type: schema.TypeString,
 		},
 	},
+}
+
+func converSetToSliceStr(data *schema.Set) []string {
+	permissions := data.List()
+	permsStr := make([]string, len(permissions))
+
+	for i, v := range permissions {
+		permsStr[i] = fmt.Sprint(v)
+	}
+	return permsStr
 }

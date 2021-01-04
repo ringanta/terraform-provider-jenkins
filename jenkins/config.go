@@ -18,6 +18,7 @@ type jenkinsClient interface {
 	DeleteLocalUser(username string) error
 	GetUserPermissions(username string) (jenkinsUserPermissions, error)
 	CreateUserPermissions(username string, permissions []string) error
+	UpdateUserPermissions(username string, permissions []string) error
 	PostScript(payload bytes.Buffer, respStruct interface{}) error
 }
 
@@ -185,10 +186,31 @@ func (j *jenkinsAdapter) CreateUserPermissions(username string, permissions []st
 	return nil
 }
 
+func (j *jenkinsAdapter) UpdateUserPermissions(username string, permissions []string) error {
+	var command bytes.Buffer
+
+	commandTemplate := template.Must(template.New("command").Parse(updateUserPermissionsCommand))
+	err := commandTemplate.Execute(&command, jenkinsUserPermissions{Username: username, Permissions: permissions})
+	if err != nil {
+		return fmt.Errorf("Error parsing groovy commands to update user permissions: %v", err)
+	}
+
+	response := jenkinsResponseUserPermissions{}
+	var respStruct interface{} = &response
+
+	j.PostScript(command, respStruct)
+	if response.Error {
+		return fmt.Errorf(response.Message)
+	}
+
+	return nil
+}
+
 func (j *jenkinsAdapter) PostScript(payload bytes.Buffer, respStruct interface{}) error {
 	finalPayload := url.Values{}
 	finalPayload.Set("script", payload.String())
 
+	fmt.Println(payload.String())
 	resp, err := j.Requester.Post("/scriptText", strings.NewReader(finalPayload.Encode()), respStruct, map[string]string{})
 	if err != nil {
 		return fmt.Errorf("Error making request to Jenkins: %v", err)

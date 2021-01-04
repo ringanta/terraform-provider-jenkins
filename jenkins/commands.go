@@ -170,13 +170,14 @@ def permissionIds = Permission.all.findAll { permission ->
 def strategy = Jenkins.instance.getAuthorizationStrategy()
 def result = [error: false, msg: '', data: [:]]
 def user_permissions = [{{range .Permissions}}'{{.}}',{{end}}]
+user_permissions.removeAll([null])
 
 user_permissions.collect {
 	strategy.add(permissionIds[it], '{{ .Username }}')
 }
 
 strategy.grantedPermissions.collect { permission, userList ->
-	if (!user_permissions.contains(shortName(permission)) {
+	if (!user_permissions.contains(shortName(permission))) {
 		userList.remove('{{ .Username }}')
 	}
 }
