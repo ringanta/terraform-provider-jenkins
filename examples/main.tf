@@ -15,7 +15,9 @@ resource "jenkins_authorization_global_matrix" "test" {
     "Overall/Read",
     "Job/Build",
     "Job/Cancel",
-    "Job/Read"
+    "Job/Read",
+    "Run/Update",
+    "Run/Delete"
   ]
 }
 

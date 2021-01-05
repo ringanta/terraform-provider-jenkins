@@ -135,10 +135,12 @@ def permissionIds = Permission.all.findAll { permission ->
 def strategy = Jenkins.instance.getAuthorizationStrategy()
 def result = [error: false, msg: '', data: [:]]
 def user_permissions = [{{range .Permissions}}'{{.}}',{{end}}]
+user_permissions.removeAll([null])
 
 user_permissions.collect {
 	strategy.add(permissionIds[it], '{{ .Username }}')
 }
+
 Jenkins.instance.save()
 result['msg'] = 'Permissions for user {{ .Username }} is created'
 
