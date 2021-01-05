@@ -3,7 +3,7 @@ HOSTNAME=ringanta.id
 NAMESPACE=ringanta
 NAME=jenkins
 BINARY=terraform-provider-${NAME}
-VERSION=0.2.1
+VERSION=0.3
 OS_ARCH=darwin_amd64
 export COMPOSE_FILE=./docker_compose/docker-compose.yml
 

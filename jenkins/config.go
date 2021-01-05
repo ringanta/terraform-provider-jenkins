@@ -2,9 +2,13 @@ package jenkins
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"text/template"
@@ -64,14 +68,35 @@ type Config struct {
 	CACert    io.Reader
 	Username  string
 	Password  string
+	VerifySSL bool
 }
 
 func newJenkinsClient(c *Config) *jenkinsAdapter {
-	client := jenkins.CreateJenkins(nil, c.ServerURL, c.Username, c.Password)
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
 	if c.CACert != nil {
 		// provide CA certificate if server is using self-signed certificate
-		client.Requester.CACert, _ = ioutil.ReadAll(c.CACert)
+		certs, err := ioutil.ReadAll(c.CACert)
+		if err != nil {
+			log.Fatal("Failed to read provided certificate file")
+		}
+
+		if ok := rootCAs.AppendCertsFromPEM(certs); !ok {
+			log.Println("No certs appended, using system certs only")
+		}
 	}
+
+	config := &tls.Config{
+		InsecureSkipVerify: !c.VerifySSL,
+		RootCAs:            rootCAs,
+	}
+	tr := &http.Transport{TLSClientConfig: config}
+	httpClient := &http.Client{Transport: tr}
+
+	client := jenkins.CreateJenkins(httpClient, c.ServerURL, c.Username, c.Password)
 
 	// return the Jenkins API client
 	return &jenkinsAdapter{Jenkins: client}

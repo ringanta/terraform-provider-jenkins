@@ -36,6 +36,12 @@ func Provider() *schema.Provider {
 				DefaultFunc: schema.EnvDefaultFunc("JENKINS_PASSWORD", nil),
 				Description: "Password to authenticate to Jenkins. User API Token can be used to replace user password.",
 			},
+			"verify_ssl": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("JENKINS_VERIFY_SSL", true),
+				Description: "Flag to turn off ssl verification",
+			},
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -56,6 +62,7 @@ func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}
 		ServerURL: d.Get("server_url").(string),
 		Username:  d.Get("username").(string),
 		Password:  d.Get("password").(string),
+		VerifySSL: d.Get("verify_ssl").(bool),
 	}
 
 	var err error
